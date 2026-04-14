@@ -209,8 +209,8 @@ const FIXED_D = Dict{String, Dict{Symbol, Float64}}(
 # Default author assignments per (mineral, charge)
 # Modify via set_lsm_authors!()
 const LSM_AUTHORS = Dict{Tuple{String,Int}, String}(
-    ("fsp", 3) => "sun17",
-    ("fsp", 2) => "sun17",
+    ("fsp", 3) => "sun17_3",
+    ("fsp", 2) => "sun17_2",
     ("cpx", 3) => "sl12",
     ("opx", 3) => "bed25",
     ("amp", 3) => "shi17melt",
@@ -296,20 +296,32 @@ end
 
 function _D_lsm(mineral, elements, charges, params, authors_map, A)
     T = Float64(params[:T])
-    authors, lsm_charge = _resolve_authors_and_charge(mineral, charges, authors_map)
-    lsm = LatticeStrainModels.get_lsm(mineral=mineral, charge=lsm_charge, authors=authors)
+    length(elements) == length(charges) || error("elements and charges must have the same length")
 
-    r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
-    E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
-    D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
+    # Resolve and run one LSM per requested charge, then recombine.
+    result = Dict{Symbol, Float64}()
+    for charge in unique(charges)
+        idx = findall(==(charge), charges)
+        group_elements = elements[idx]
+        group_charges  = charges[idx]
 
-    return _lattice_strain_D(r0, E, D0, elements, charges, lsm_charge, lsm.coordination, T; A=A)
+        authors, lsm_charge = _resolve_authors_and_charge(mineral, charge, authors_map)
+        lsm = LatticeStrainModels.get_lsm(mineral=mineral, charge=lsm_charge, authors=authors)
+
+        r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
+        E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
+        D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
+
+        merge!(result, _lattice_strain_D(r0, E, D0, group_elements, group_charges, lsm_charge, lsm.coordination, T; A=A))
+    end
+
+    return result
 end
 
 
-function _resolve_authors_and_charge(mineral, charges, authors_map)
-    # Use the dominant charge (most common, or first) to find the best LSM
-    target_charge = 3  # Best constrained, always available
+function _resolve_authors_and_charge(mineral, target_charge, authors_map)
+    # Prefer exact (mineral, charge); otherwise use closest available charge.
+    target_charge = Int(target_charge)
 
     map = authors_map !== nothing ? authors_map : LSM_AUTHORS
     key = (mineral, target_charge)
@@ -321,7 +333,7 @@ function _resolve_authors_and_charge(mineral, charges, authors_map)
         available = [(k[2], v) for (k, v) in map if k[1] == mineral]
         isempty(available) && error("No LSM author entry for mineral: $mineral")
         closest_charge, closest_authors = argmin(x -> abs(x[1] - target_charge), available)
-        @warn "No LSM for ($mineral, charge=$target_charge) — using charge=$closest_charge"
+        #@warn "No LSM for ($mineral, charge=$target_charge) — using charge=$closest_charge"
         return closest_authors, closest_charge
     end
 end

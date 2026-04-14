@@ -36,7 +36,7 @@ const _fsp3_bed23 = LatticeStrainModel(
 
 """ Feldspar; 3+; Sun et al. (2017) """
 const _fsp3_sun17 = LatticeStrainModel(
-    "fsp", 3, 8, "sun17",
+    "fsp", 3, 8, "sun17_3",
     1.179,
     196.0,
     params -> exp(16.05 - (19.45 + 1.17*(params[:P]/10)^2) / (R*(params[:T]+273.15)) * 1e4 - 5.17*params[:fspXCa]^2)
@@ -45,7 +45,7 @@ const _fsp3_sun17 = LatticeStrainModel(
 
 """ Feldspar; 2+; Sun et al. (2017) """
 const _fsp2_sun17 = LatticeStrainModel(
-    "fsp", 2, 8, "sun17",
+    "fsp", 2, 8, "sun17_2",
     params -> 0.075*params[:fspXNa]+1.189,
     params -> -487*(0.075*params[:fspXNa]+1.189) + 719,
     params -> exp(2.39*params[:fspXNa]^2+(6910-2542*(params[:P]/10)^2)/(R*(params[:T]+273.15)))
@@ -195,8 +195,8 @@ const _zr3_str23 = LatticeStrainModel(
 
 const _REGISTRY = Dict{Tuple{String,Int,String}, LatticeStrainModel}(
 	("fsp", 3, "bed23") => _fsp3_bed23,
-    ("fsp", 3, "sun17") => _fsp3_sun17,
-	("fsp", 2, "sun17") => _fsp2_sun17,
+    ("fsp", 3, "sun17_3") => _fsp3_sun17,
+	("fsp", 2, "sun17_2") => _fsp2_sun17,
 	("cpx", 3, "sl12") => _cpx3_sl12,
 	("cpx", 3, "bed14M1") => _cpx3_bed14M1,
 	("cpx", 3, "bed14M2") => _cpx3_bed14M2,
