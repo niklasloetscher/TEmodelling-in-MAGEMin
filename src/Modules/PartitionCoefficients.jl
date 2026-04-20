@@ -203,7 +203,25 @@ const FIXED_D = Dict{String, Dict{Symbol, Float64}}(
         :Yb  => 0.017,
         :Lu  => 0.012,
         :Sr  => 1e-5,
-    ) # THIS IS JUST A COPY OF "q"!
+    ), # THIS IS JUST A COPY OF "q"!
+	"ep" => Dict(
+        :La  => 2.05,
+        :Ce  => 2.44,
+        :Pr  => 2.86,
+        :Nd  => 3.34,
+        :Sm  => 4.22,
+		:Eu => 3.78,
+        :Gd  => 4.67,
+        :Tb  => 4.67,
+        :Dy  => 4.50,
+        :Y   => 4.30,
+        :Ho  => 4.18,
+        :Er  => 3.78,
+        :Tm  => 3.36,
+        :Yb  => 2.96,
+        :Lu  => 2.59,
+        :Sr  => 2.0,
+    ) # Table 1 Bédard 2006
 )
 
 # Default author assignments per (mineral, charge)
