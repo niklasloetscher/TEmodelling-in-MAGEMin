@@ -140,7 +140,7 @@ const _amp3_shi17melt = LatticeStrainModel(
 """ Garnet; 3; Meltzer & Kessel (2020) """
 const _g3_mk20 = LatticeStrainModel(
     "g", 3, 8, "mk20",
-    0.953,
+    params -> 1.083 - 9.027e-5*(params[:T]+273.15) - 7.865e-4*params[:gtMgO]/params[:meltMgOhydr],
     params -> 350.0*params[:meltχH2O] - 542.0*params[:meltMgNhydr] + 1854.0*params[:meltFeOhydr]/params[:meltSiO2hydr] + 485.0,
     params -> 7.2*params[:gtFeO]/params[:meltFeOhydr]
 )
