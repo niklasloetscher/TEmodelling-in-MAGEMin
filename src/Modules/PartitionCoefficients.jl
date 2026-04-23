@@ -32,7 +32,8 @@ const PHASE_ALIASES = Dict{String,String}(
     "tr"     => "amp",
     "cm"     => "spl",
     "usp"    => "spl",
-    "mgt"    => "spl"
+    "mgt"    => "spl",
+	"pat"	 => "mu"
 )
 
 const LSM_PHASES = Set{String}(["ol", "cpx", "fsp", "amp", "spl", "opx", "g", "ap", "zr"])
@@ -79,6 +80,24 @@ const FIXED_D = Dict{String, Dict{Symbol, Float64}}(
         :Sr  => 0.60,
     ), # Supplement Table S4 Soderman & Weller 2026
 	"mu" => Dict(
+        :La  => 0.61,
+        :Ce  => 0.32,
+        :Pr  => 0.29,
+        :Nd  => 0.18,
+        :Sm  => 0.05,
+		:Eu  => 0.031,
+        :Gd  => 0.04,
+        :Tb  => 0.06,
+        :Dy  => 0.29,
+        :Y   => 1.00,
+        :Ho  => 0.07,
+        :Er  => 0.10,
+        :Tm  => 0.29,
+        :Yb  => 0.30,
+        :Lu  => 0.33,
+        :Sr  => 0.60,
+    ), # THIS IS JUST A COPY OF "bi"!
+	"chl" => Dict(
         :La  => 0.61,
         :Ce  => 0.32,
         :Pr  => 0.29,

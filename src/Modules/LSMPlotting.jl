@@ -2,8 +2,8 @@ module LSMPlotting
 
 using CairoMakie
 
-const PHASE_COLORS = Dict{String, String}([("amp", "#777E49"),("cpx", "#B7E892"), ("opx", "#4682B4"), ("fsp", "#A9A9A9"), ("ilm", "#708090"), ("mu", "#F0E8BB"), ("nph", "#EB7347"), ("spl", "#CE2029"), ("q", "#28282D"),
-        ("bi", "#2F1B12"), ("sph", "#942222"), ("ru", "#FF1649"), ("ep", "#08F26E"), ("g", "#7B1B38"), ("ol", "#FF7415"), ("fl", "#DDEEFA"), ("ne", "#FFFFFF"), ("fper", "#FFFFFF"), ("cd", "#007FFF"), ("ap", "#FF00FF"), ("zr", "#CC7722"), ("liq", "#FFFFFF")])
+const PHASE_COLORS = Dict{String, String}([("amp", "#777E49"),("cpx", "#B7E892"), ("opx", "#4682B4"), ("fsp", "#A9A9A9"), ("ilm", "#708090"), ("mu", "#F0E8BB"), ("pat", "#F0E8BB"), ("nph", "#EB7347"), ("spl", "#CE2029"), ("q", "#28282D"),
+        ("bi", "#2F1B12"), ("chl", "#7CFC00"), ("sph", "#942222"), ("ru", "#FF1649"), ("ep", "#08F26E"), ("g", "#7B1B38"), ("ol", "#FF7415"), ("fl", "#DDEEFA"), ("ne", "#FFFFFF"), ("fper", "#FFFFFF"), ("cd", "#007FFF"), ("ap", "#FF00FF"), ("zr", "#CC7722"), ("liq", "#FFFFFF")])
 		
 const PHASE_ALIASES = Dict{String,String}(
     "Na-cpx" => "cpx",
@@ -17,7 +17,8 @@ const PHASE_ALIASES = Dict{String,String}(
     "tr"     => "amp",
     "cm"     => "spl",
     "usp"    => "spl",
-    "mgt"    => "spl"
+    "mgt"    => "spl",
+	"pat"    => "mu"
 )
 
 const CHONDRITIC_TE = Dict{String, Float64}([])
