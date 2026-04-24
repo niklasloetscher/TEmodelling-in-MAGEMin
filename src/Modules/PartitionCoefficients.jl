@@ -7,7 +7,7 @@ export get_D
 
 using CSV, DataFrames
 
-const R = 8.314  # J/mol/K
+const R = 8.3144626  # J/mol/K
 
 const _SHANNON = let
     path = joinpath(@__DIR__, "..", "Data", "Ionic radii", "shannon.csv")
@@ -248,7 +248,7 @@ const FIXED_D = Dict{String, Dict{Symbol, Float64}}(
 const LSM_AUTHORS = Dict{Tuple{String,Int}, String}(
     ("fsp", 3) => "sun17_3",
     ("fsp", 2) => "sun17_2",
-    ("cpx", 3) => "sl12",
+    ("cpx", 3) => "bed14",
     ("opx", 3) => "bed25",
     ("amp", 3) => "shi17melt",
     ("g", 3) => "mk20",
@@ -343,13 +343,62 @@ function _D_lsm(mineral, elements, charges, params, authors_map, A)
         group_charges  = charges[idx]
 
         authors, lsm_charge = _resolve_authors_and_charge(mineral, charge, authors_map)
-        lsm = LatticeStrainModels.get_lsm(mineral=mineral, charge=lsm_charge, authors=authors)
+        
+        is_multisite = LatticeStrainModels.has_multisite_model(mineral, lsm_charge, authors)
+        is_single_site = LatticeStrainModels.has_single_site_model(mineral, lsm_charge, authors)
+        
+        charge_result = Dict{Symbol, Float64}()
+        total_weight = 0.0
+        
+        if is_multisite && is_single_site
+            error("Ambiguous LSM mapping for mineral=$mineral, charge=$lsm_charge, authors=$authors: present in both single-site and multisite registries")
+        elseif is_multisite
+            variants_with_weights = LatticeStrainModels.get_multisite_variants(mineral, lsm_charge, authors)
+            variants_with_weights === nothing && error("Internal error: multisite model lookup failed for mineral=$mineral, charge=$lsm_charge, authors=$authors")
 
-        r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
-        E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
-        D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
+            # Multisite model: compute variants weighted by stoichiometry
+            for (variant_authors, weight) in variants_with_weights
+                lsm = LatticeStrainModels.get_lsm(mineral=mineral, charge=lsm_charge, authors=variant_authors)
 
-        merge!(result, _lattice_strain_D(r0, E, D0, group_elements, group_charges, lsm_charge, lsm.coordination, T; A=A))
+                r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
+                E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
+                D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
+
+                variant_result = _lattice_strain_D(r0, E, D0, group_elements, group_charges, lsm_charge, lsm.coordination, T; A=A)
+                
+                # Accumulate weighted results
+                for (el, d) in variant_result
+                    if haskey(charge_result, el)
+                        charge_result[el] += d * weight
+                    else
+                        charge_result[el] = d * weight
+                    end
+                end
+                total_weight += weight
+            end
+
+            total_weight > 0.0 || error("Invalid multisite weights for mineral=$mineral, charge=$lsm_charge, authors=$authors: sum(weights) must be > 0")
+            
+            # Normalize by total weight
+            for el in keys(charge_result)
+                charge_result[el] /= total_weight
+            end
+        elseif is_single_site
+            # Single-site model: just use the authors directly
+            lsm = LatticeStrainModels.get_lsm(mineral=mineral, charge=lsm_charge, authors=authors)
+
+            r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
+            E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
+            D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
+
+            charge_result = _lattice_strain_D(r0, E, D0, group_elements, group_charges, lsm_charge, lsm.coordination, T; A=A)
+        else
+            error(
+                "No LSM entry for mineral=$mineral, charge=$lsm_charge, authors=$authors in either registry"
+            )
+        end
+        
+        merge!(result, charge_result)
     end
 
     return result
@@ -411,8 +460,8 @@ function _lattice_strain_D(
         ri_si   = ri * 1e-10
         dcharge = z - lsm_charge
 
-        dr     = ri_si - r0_si
-        strain = -4π * E_si * NA * (r0_si/2 * dr^2 + dr^3/3)
+        dr     = r0_si - ri_si
+        strain = -4π * E_si * NA * (r0_si/2 * dr^2 - dr^3/3)
         D      = D0 * exp(strain / (R * T_K))
 
         if dcharge != 0

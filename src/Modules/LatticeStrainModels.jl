@@ -2,7 +2,7 @@ module LatticeStrainModels
 
 export LatticeStrainModel, get_lsm
 
-const R = 8.314  # J/mol/K
+const R = 8.3144626 # J/mol/K
 
 struct LatticeStrainModel
     mineral::String
@@ -64,39 +64,39 @@ const _cpx3_sl12 = LatticeStrainModel(
 const _cpx3_bed14M1 = LatticeStrainModel(
     "cpx", 3, 8, "bed14M1",
     params -> begin
-		if (18e4/(params[:T]+273.15)-13.0) < -0.17112
-			r0 = -0.0040115*(18e4/(params[:T]+273.15)-13.0)^2-0.019187*(18e4/(params[:T]+273.15)-13.0)+0.74173
+		if (18e3/(params[:T]+273.15)-13.0) < -0.17112
+			r0 = -0.0040115*(18e3/(params[:T]+273.15)-13.0)^2-0.019187*(18e3/(params[:T]+273.15)-13.0)+0.74173
 		else
 			r0 = 0.744896
 		end
 		return r0
 	end,
     params -> begin
-		if (18e4/(params[:T]+273.15)-13.0) < -0.15489
-			E = 47.214*(18e4/(params[:T]+273.15)-13.0)^2-135.08*(18e4/(params[:T]+273.15)-13.0)+694.21
+		if (18e3/(params[:T]+273.15)-13.0) < -0.15489
+			E = 47.214*(18e3/(params[:T]+273.15)-13.0)^2-135.08*(18e3/(params[:T]+273.15)-13.0)+694.21
 		else
-			E = -0.86319*(18e4/(params[:T]+273.15)-13.0)^2+31.794*(18e4/(params[:T]+273.15)-13.0)+721.21
+			E = -0.86319*(18e3/(params[:T]+273.15)-13.0)^2+31.794*(18e3/(params[:T]+273.15)-13.0)+721.21
 		end
 		return E
 	end,
-    params -> exp(1.2849*(18e4/(params[:T]+273.15)-13.0)+1.3636)
+    params -> exp(1.2849*(18e3/(params[:T]+273.15)-13.0)+1.3636)
 )
 
 """ Clinopyroxene M2; 3+; Bédard (2014) """
 const _cpx3_bed14M2 = LatticeStrainModel(
     "cpx", 3, 8, "bed14M2",
-	params -> 0.00020599*(18e4/(params[:T]+273.15)-13.0)^3-0.0017107*(18e4/(params[:T]+273.15)-13.0)^2+0.013443*(18e4/(params[:T]+273.15)-13.0)+1.0401,
+	params -> 0.00020599*(18e3/(params[:T]+273.15)-13.0)^3-0.0017107*(18e3/(params[:T]+273.15)-13.0)^2+0.013443*(18e3/(params[:T]+273.15)-13.0)+1.0401,
     params -> begin
-		if (18e4/(params[:T]+273.15)-13.0) < -3.0176
-			E = -1.4171*(18e4/(params[:T]+273.15)-13.0)^2 + 1.2721*(18e4/(params[:T]+273.15)-13.0) + 694.21
-		elseif (18e4/(params[:T]+273.15)-13.0) >= -3.0176 & (18e4/(params[:T]+273.15)-13.0) < -1.95982
-			E = 8.5143*(18e4/(params[:T]+273.15)-13.0)^2 + 71.2*(18e4/(params[:T]+273.15)-13.0) + 429.54
+		if (18e3/(params[:T]+273.15)-13.0) < -3.0176
+			E = -1.4171*(18e3/(params[:T]+273.15)-13.0)^2 + 1.2721*(18e3/(params[:T]+273.15)-13.0) + 308.96
+		elseif ((18e3/(params[:T]+273.15)-13.0) >= -3.0176) & ((18e3/(params[:T]+273.15)-13.0) < -1.95982)
+			E = 8.5143*(18e3/(params[:T]+273.15)-13.0)^2 + 71.2*(18e3/(params[:T]+273.15)-13.0) + 429.54
 		else
-			E = -0.60535*(18e4/(params[:T]+273.15)-13.0)^2 + 13.104*(18e4/(params[:T]+273.15)-13.0) + 350.71
+			E = -0.60535*(18e3/(params[:T]+273.15)-13.0)^2 + 13.104*(18e3/(params[:T]+273.15)-13.0) + 350.71
 		end
 		return E
 	end,
-    params -> exp(-0.0020082*(18e4/(params[:T]+273.15)-13.0)^3+0.02549*(18e4/(params[:T]+273.15)-13.0)^2+0.86352*(18e4/(params[:T]+273.15)-13.0)+0.17177)
+    params -> exp(-0.0020082*(18e3/(params[:T]+273.15)-13.0)^3+0.02549*(18e3/(params[:T]+273.15)-13.0)^2+0.86352*(18e3/(params[:T]+273.15)-13.0)+0.17177)
 )
 
 """ Orthopyroxene; 3; Bédard (2025) """
@@ -179,9 +179,9 @@ const _ol3_bed05 = LatticeStrainModel(
 """ Apatite; 3; Jirku et al. (2025) """
 const _ap3_jir25 = LatticeStrainModel(
     "ap", 3, 9, "jir25",
-    params -> 7.191e-5*(params[:T]+273.15) + 3.723e-3*params[:meltXP2O5] - 15.6e-4*params[:meltXCa] - 1.047,
-    params -> 0.366*(params[:T]+273.15) + 6.112*params[:meltXP2O5] - 7.388*params[:meltXCa] - 135.8,
-    params -> exp(5.16*params[:meltXCa]^(-0.416))
+    params -> 7.191e-5*(params[:T] + 273.15) + 3.723e-3*params[:meltP2O5] - 15.6e-4*params[:meltCaO] + 1.047,
+    params -> 0.366*(params[:T] + 273.15) + 6.112*params[:meltP2O5] - 7.388*params[:meltCaO] - 135.8,
+    params -> exp(5.16*(params[:meltCaO]*100.0)^(-0.416))
 )
 
 """ Zircon; 3; Streicher et al. (2023) """
@@ -210,6 +210,28 @@ const _REGISTRY = Dict{Tuple{String,Int,String}, LatticeStrainModel}(
 	("ap", 3, "jir25") => _ap3_jir25,
 	("zr", 3, "str23") => _zr3_str23
 )
+
+""" 
+Multisite model variants with stoichiometric weights.
+Maps (mineral, charge, authors) => [(variant_authors_1, weight_1), (variant_authors_2, weight_2), ...]
+Weights are normalized by the caller to give the weighted average.
+"""
+const _MULTISITE_REGISTRY = Dict{Tuple{String,Int,String}, Vector{Tuple{String, Float64}}}(
+    ("cpx", 3, "bed14") => [("bed14M1", 1.0), ("bed14M2", 1.0)]
+)
+
+function get_multisite_variants(mineral::String, charge::Int, authors::String)
+    key = (mineral, charge, authors)
+    return get(_MULTISITE_REGISTRY, key, nothing)
+end
+
+function has_single_site_model(mineral::String, charge::Int, authors::String)
+    return haskey(_REGISTRY, (mineral, charge, authors))
+end
+
+function has_multisite_model(mineral::String, charge::Int, authors::String)
+    return haskey(_MULTISITE_REGISTRY, (mineral, charge, authors))
+end
 
 function get_lsm(; mineral::String, charge::Int, authors::String)
     key = (mineral, charge, authors)
