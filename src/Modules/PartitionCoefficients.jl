@@ -1,14 +1,16 @@
-module PartitionCoefficients
+module PartitionCoefficientsV2
 
 using ..LatticeStrainModels
 using ..LSMUtils
 
-export get_D
+export get_D, set_lsm_authors!
 
 using CSV, DataFrames
 
+# Gas constant
 const R = 8.3144626  # J/mol/K
 
+# Ionic radii from Shannon(1976) in °A
 const _SHANNON = let
     path = joinpath(@__DIR__, "..", "Data", "Ionic radii", "shannon.csv")
     df = CSV.read(path, DataFrame)
@@ -20,6 +22,7 @@ const _SHANNON = let
     )
 end
 
+# Phase aliases for some phases in MAGEMin based on composition
 const PHASE_ALIASES = Dict{String,String}(
     "Na-cpx" => "cpx",
     "pig"    => "cpx",
@@ -36,9 +39,18 @@ const PHASE_ALIASES = Dict{String,String}(
 	"pat"	 => "mu"
 )
 
-const LSM_PHASES = Set{String}(["ol", "cpx", "fsp", "amp", "spl", "opx", "g", "ap", "zr"])
+# Phases for which LSMs are implemented in LatticeStrainModels.jl
+const LSM_PHASES = Set{String}(model.mineral for model in values(LatticeStrainModels._REGISTRY))
 
+# LSM_PHASES are only implemented for canonical phase names, so I need a function tha maps phase name to canonical phase name based on PHASE_ALIASES
+# This function needs to map e.g. "Na-cpx" to "cpx", but also handle the case where the phase is simply named "cpx" in whic case it also maps to "cpx"
 canonical(phase::String) = get(PHASE_ALIASES, phase, phase)
+
+function _get_ri(element::Symbol, charge::Int, coordination::Int)
+    key = (String(element), charge, coordination)
+    haskey(_SHANNON, key) || error("No ionic radius for element=$(element), charge=$(charge), coordination=$(coordination)")
+    return _SHANNON[key]
+end
 
 # Fixed partition coefficients for non-LSM minerals
 # Dict: mineral => (element => D)
@@ -243,243 +255,199 @@ const FIXED_D = Dict{String, Dict{Symbol, Float64}}(
     ) # Table 1 Bédard 2006
 )
 
+
 # Default author assignments per (mineral, charge)
 # Modify via set_lsm_authors!()
 const LSM_AUTHORS = Dict{Tuple{String,Int}, String}(
     ("fsp", 3) => "sun17_3",
     ("fsp", 2) => "sun17_2",
-    ("cpx", 3) => "bed14",
+    ("cpx", 3) => "sl12",
+	("cpx", 2) => "wb14cpx", # Based on "sl12"!
     ("opx", 3) => "bed25",
+	("opx", 2) => "wb14opx", # Based on "bed25"!
     ("amp", 3) => "shi17melt",
     ("g", 3) => "mk20",
+	("g", 2) => "wb14g", # Based on "mk20"!
     ("spl", 3) => "sie20",
-    ("ol", 3) => "bed05",
+    ("ol", 3) => "sl13ol",
+	("ol", 2) => "wb14ol", # Based on "bed05"!
 	("ap", 3) => "jir25",
 	("zr", 3) => "str23"	
 )
 
-function _get_ri(element::Symbol, charge::Int, coordination::Int)
-    key = (string(element), charge, coordination)
-    haskey(_SHANNON, key) || error("No ionic radius for $element, charge=$charge, coordination=$coordination")
-    return _SHANNON[key]
-end
-
+# Function to set alternative author for a (mineral, charge) pair
 function set_lsm_authors!(mineral::String, charge::Int, authors::String)
+    """
+    Input:
+        mineral: Mineral name (e.g. "cpx")
+        charge: Charge state (e.g. 3 for trivalent)
+        authors: Author string corresponding to a model in LatticeStrainModels._REGISTRY (e.g. "bed14M1")
+    """
     LSM_AUTHORS[(mineral, charge)] = authors
 end
 
 
-function get_D(
-    mineral::String,
-    elements::Vector{Symbol},
-    charges::Vector{Int},
-    params::Dict;
-    authors_map::Union{Dict{Tuple{String,Int},String}, Nothing} = nothing,
-    A::Float64 = 28.0
-) :: Dict{Symbol, Float64}
-    cmineral = canonical(mineral)
+# Function to get partition coeffficients for given mineral, list of elements and their cation charge.
+function get_D(mineral::String, elements::Vector{Symbol}, charges::Vector{Int}, params::Dict{Symbol, Float64}) :: Dict{Symbol, Float64}
+    """
+    Input:
+        mineral: Mineral name (e.g. "cpx")
+        elements: Vector of element symbols (e.g. [:La, :Ce, :Nd])
+        charges: Vector of cation charges corresponding to the elements (e.g. [3, 3, 3])
+        params: Dict of required parameters for the LSM model (e.g. T, logfO2, Λ, compositional, etc.)
 
-    # Split Eu from the rest
-    eu_idx    = findall(==(:Eu), elements)
-    other_idx = findall(!=(:Eu), elements)
+    Output: Dict{Symbol, Float64} mapping element symbol to partition coefficient D for the given mineral.
 
-    other_elements = elements[other_idx]
-    other_charges  = charges[other_idx]
+    """
 
-    result = Dict{Symbol, Float64}()
+    # Internal constant to adjust for charge mismatch after Wood & Blundy (2014)
+    A = 28.0e3
 
-    # Standard path for all non-Eu elements
-    if !isempty(other_elements)
-        if cmineral in LSM_PHASES
-            merge!(result, _D_lsm(cmineral, other_elements, other_charges, params, authors_map, A))
+    # Canonical mineral name
+    mineral = canonical(mineral)
+    # Ensure elements are Symbols (accept string or symbol input)
+    # Check if canonical(mineral) is in LSM_PHASES
+    hasLSM = mineral in LSM_PHASES
+
+    # If there is no LSM, just return the fixed D values from FIXED_D for canonical(mineral). Throw an error if either the mineral is not implemented in FIXED_D or if any of the elements are not implemented for that mineral.
+    if !hasLSM
+        haskey(FIXED_D, mineral) || error("No fixed D values for mineral=$(canonical(mineral)). Available: $(keys(FIXED_D))")
+        D_dict = FIXED_D[mineral]
+        # Collect results but provide diagnostics if a key is missing (helps catch Symbol vs String mismatches)
+        if all(haskey(D_dict, el) for el in elements)
+            return Dict(el => D_dict[el] for el in elements)
         else
-            merge!(result, Dict(el => _D_fixed(cmineral, el) for el in other_elements))
-        end
-    end
-
-    # Eu path
-    if !isempty(eu_idx)
-        result[:Eu] = _D_Eu(cmineral, params, authors_map, A)
-    end
-
-    return result
-end
-
-
-function _D_Eu(mineral, params, authors_map, A)
-    # Eu3+ — standard LSM or fixed D path
-    Kd_Eu3 = if mineral in LSM_PHASES
-        _D_lsm(mineral, [:Eu], [3], params, authors_map, A)[:Eu]
-    else
-        _D_fixed(mineral, :Eu)
-    end
-
-    # Eu2+ — LSM or fixed D with charge=2
-    Kd_Eu2 = if mineral in LSM_PHASES
-        _D_lsm(mineral, [:Eu], [2], params, authors_map, A)[:Eu]
-    else
-        _D_fixed(mineral, :Eu)   # no charge distinction for fixed D
-    end
-
-    # Eu2+/Eu3+; requires :logfO2, :T, :Λ in params
-    ratio = LSMUtils.Eu_ratio_Burnham(
-        Float64(params[:logfO2]),
-        Float64(params[:T]),
-        Float64(params[:Λ])
-    )
-
-    return LSMUtils.Kd_Eu(Kd_Eu2, Kd_Eu3, ratio)
-end
-
-function _D_lsm(mineral, elements, charges, params, authors_map, A)
-    T = Float64(params[:T])
-    length(elements) == length(charges) || error("elements and charges must have the same length")
-
-    # Resolve and run one LSM per requested charge, then recombine.
-    result = Dict{Symbol, Float64}()
-    for charge in unique(charges)
-        idx = findall(==(charge), charges)
-        group_elements = elements[idx]
-        group_charges  = charges[idx]
-
-        authors, lsm_charge = _resolve_authors_and_charge(mineral, charge, authors_map)
-        
-        is_multisite = LatticeStrainModels.has_multisite_model(mineral, lsm_charge, authors)
-        is_single_site = LatticeStrainModels.has_single_site_model(mineral, lsm_charge, authors)
-        
-        charge_result = Dict{Symbol, Float64}()
-        total_weight = 0.0
-        
-        if is_multisite && is_single_site
-            error("Ambiguous LSM mapping for mineral=$mineral, charge=$lsm_charge, authors=$authors: present in both single-site and multisite registries")
-        elseif is_multisite
-            variants_with_weights = LatticeStrainModels.get_multisite_variants(mineral, lsm_charge, authors)
-            variants_with_weights === nothing && error("Internal error: multisite model lookup failed for mineral=$mineral, charge=$lsm_charge, authors=$authors")
-
-            # Multisite model: compute variants weighted by stoichiometry
-            for (variant_authors, weight) in variants_with_weights
-                lsm = LatticeStrainModels.get_lsm(mineral=mineral, charge=lsm_charge, authors=variant_authors)
-
-                r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
-                E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
-                D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
-
-                variant_result = _lattice_strain_D(r0, E, D0, group_elements, group_charges, lsm_charge, lsm.coordination, T; A=A)
-                
-                # Accumulate weighted results
-                for (el, d) in variant_result
-                    if haskey(charge_result, el)
-                        charge_result[el] += d * weight
-                    else
-                        charge_result[el] = d * weight
-                    end
+            # Diagnostic output to help debug key/type mismatches
+            println("[PartitionCoefficientsV2 DEBUG] mineral=", mineral)
+            println("[PartitionCoefficientsV2 DEBUG] FIXED_D keys: ", collect(keys(D_dict)))
+            println("[PartitionCoefficientsV2 DEBUG] elements types: ", typeof.(elements))
+            println("[PartitionCoefficientsV2 DEBUG] elements values: ", elements)
+            # Raise the original informative error for the first missing element
+            for el in elements
+                if !haskey(D_dict, el)
+                    error("No fixed D value for element=$(el) in mineral=$(canonical(mineral)). Available: $(keys(D_dict))")
                 end
-                total_weight += weight
             end
-
-            total_weight > 0.0 || error("Invalid multisite weights for mineral=$mineral, charge=$lsm_charge, authors=$authors: sum(weights) must be > 0")
-            
-            # Normalize by total weight
-            for el in keys(charge_result)
-                charge_result[el] /= total_weight
-            end
-        elseif is_single_site
-            # Single-site model: just use the authors directly
-            lsm = LatticeStrainModels.get_lsm(mineral=mineral, charge=lsm_charge, authors=authors)
-
-            r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
-            E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
-            D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
-
-            charge_result = _lattice_strain_D(r0, E, D0, group_elements, group_charges, lsm_charge, lsm.coordination, T; A=A)
-        else
-            error(
-                "No LSM entry for mineral=$mineral, charge=$lsm_charge, authors=$authors in either registry"
-            )
         end
-        
-        merge!(result, charge_result)
-    end
-
-    return result
-end
-
-
-function _resolve_authors_and_charge(mineral, target_charge, authors_map)
-    # Prefer exact (mineral, charge); otherwise use closest available charge.
-    target_charge = Int(target_charge)
-
-    map = authors_map !== nothing ? authors_map : LSM_AUTHORS
-    key = (mineral, target_charge)
-
-    if haskey(map, key)
-        return map[key], target_charge
+        #return Dict(Symbol(el) => get(D_dict, Symbol(el), error("No fixed D value for element=$(Symbol(el)) in mineral=$(canonical(mineral)). Available: $(keys(D_dict))")) for el in elements)
+    # If there is an LSM, start by reserving a D_dict of length elements
     else
-        # Find closest available charge for this mineral
-        available = [(k[2], v) for (k, v) in map if k[1] == mineral]
-        isempty(available) && error("No LSM author entry for mineral: $mineral")
-        closest_charge, closest_authors = argmin(x -> abs(x[1] - target_charge), available)
-        #@warn "No LSM for ($mineral, charge=$target_charge) — using charge=$closest_charge"
-        return closest_authors, closest_charge
-    end
-end
+        D_dict = Dict{Symbol, Float64}()
+        # Iterate over elements
+        for (i, el) in enumerate(elements)
+            # Get the charge of the element
+            charge = charges[i]
+            dcharge = 0
+            closest_charge = charge
+            # Get the LSM_AUTHORS for this mineral and charge, if there is none for this particular charge, then get the one which has the closest charge state.
 
-function _lattice_strain_D(
-    r0::Float64, E::Float64, D0::Float64,
-    elements::Vector{Symbol}, charges::Vector{Int},
-    lsm_charge::Int, coordination::Int,
-    T::Float64;
-    A::Float64 = 28.0
-)  # default A — adjust or pass in
-							
-	"""
-		r0... Ideal cation radius for this site [°A]
-		E... Effective Young's modulus [GPa]
-		D0... Zero-strain partition coefficient
-		elements... Elements for which Ds are to be returned
-		charges... Charges of elements
-		lsm_charge... Charge for this phase
-		T... Temeperature [°C]
-		
-		Opt:
-		A... Charge factor [kJ]
-	"""
+            # Case 1) There is an exact match for (mineral, charge) in LSM_AUTHORS
+            if haskey(LSM_AUTHORS, (mineral, charge))
+                authors = LSM_AUTHORS[(mineral, charge)]
+            else # Case 2) There is no exact match, so we need to find the closest charge state for this mineral in LSM_AUTHORS
+                available_charges = [c for (m, c) in keys(LSM_AUTHORS) if m == mineral]
+                if isempty(available_charges)
+                    error("No LSM authors found for mineral=$(mineral). Available: $(keys(LSM_AUTHORS))")
+                end
+                closest_charge = available_charges[argmin(abs.(available_charges .- charge))]
+                dcharge = abs(closest_charge - charge)
+                authors = LSM_AUTHORS[(mineral, closest_charge)]
+                #@warn "No LSM authors found for mineral=$(mineral) and charge=$(charge). Using authors=$(authors) for closest charge=$(closest_charge) instead."
+            end
 
-	length(elements) == length(charges) || error("elements and charges must have the same length")
+            # Eu needs to be handled specially because it is in a mixed valence state
+            isEu = el == :Eu
 
-    # Convert to SI
-    r0_si = r0 * 1e-10
-    E_si  = E  * 1e9
-    T_K   = T  + 273.15
-    A_J   = A  * 1e3
-    NA    = 6.02214e23
+            if isEu
+                # Compute Eu ratio 
+                eu_ratio = LSMUtils.Eu_ratio_Burnham(params[:logfO2], params[:T], params[:Λ])
+                # Compute both D for Eu2+ and Eu3+; :Eu is given with charge 3
+                D_Eu3 = _LSM_D(mineral, el, 3, authors, params)
+                # Need to check whether there is a model for 2+ again here
+                if haskey(LSM_AUTHORS, (mineral, 2))
+                    D_Eu2 = _LSM_D(mineral, el, 2, LSM_AUTHORS[(mineral, 2)], params)
+                else
+                    # Find model with closest charge state to 2
+                    available_charges = [c for (m, c) in keys(LSM_AUTHORS) if m == mineral]
+                    if isempty(available_charges)
+                        error("No LSM authors found for mineral=$(mineral). Available: $(keys(LSM_AUTHORS))")
+                    end
+                    closest_chargeEu = available_charges[argmin(abs.(available_charges .- 2))]
+                    dchargeEu = abs(closest_chargeEu - 2)
+                    authorsEu = LSM_AUTHORS[(mineral, closest_chargeEu)]
+                    D_Eu2 = _LSM_D(mineral, el, 2, authorsEu, params) * exp(-A * dchargeEu^2 / (R * params[:T])) # Adjust for charge mismatch using Wood & Blundy (2014)
+                end
+                # Compute Eu D
+                D_dict[el] = LSMUtils.D_Eu(D_Eu2, D_Eu3, eu_ratio)
+            else
+                # Compute _LSM_D(mineral, charge, authors, el) and add it to D_dict
+                if dcharge == 0
+                    D_dict[el] = _LSM_D(mineral, el, charge, authors, params)
+                else
+                    D_dict[el] = _LSM_D(mineral, el, charge, authors, params) * exp(-A * dcharge^2 / (R * params[:T])) # Adjust for charge mismatch using Wood & Blundy (2014)
+                end
+            end
 
-    result = Dict{Symbol, Float64}()
-    for (el, z) in zip(elements, charges)
-        ri      = _get_ri(el, z, coordination)
-        ri_si   = ri * 1e-10
-        dcharge = z - lsm_charge
-
-        dr     = r0_si - ri_si
-        strain = -4π * E_si * NA * (r0_si/2 * dr^2 - dr^3/3)
-        D      = D0 * exp(strain / (R * T_K))
-
-        if dcharge != 0
-            D *= exp(-A_J * abs(dcharge) / (R * T_K))
         end
-
-        result[el] = D
     end
-    return result
+
+    return D_dict
+
 end
 
-function _D_fixed(mineral, element)
-    haskey(FIXED_D, mineral) || error("No fixed-D data for mineral: $mineral")
-    d = FIXED_D[mineral]
-    haskey(d, element) || error("No fixed D for $element in $mineral")
-    return d[element]
-end
+function _LSM_D(mineral::String, element::Symbol, elcharge::Int, authors::String, params::Dict{Symbol, Float64}) :: Float64
+    """
+        Input:
+            mineral: Mineral name (e.g. "cpx")
+            element: Element symbol (e.g. :La)
+            elcharge: Element charge state for getting ri, can be different from the charge for which LSM of authors is defined (e.g. 3 for trivalent)
+            authors: Author string corresponding to a model in LatticeStrainModels._REGISTRY (e.g. "bed14M1")
+            params: Dict of required parameters for the LSM model (e.g. T, logfO2, Λ, compositional, etc.)
+    
+        Output: Partition coefficient D for the given mineral, element and charge state computed using the Lattice Strain Model with the parameters from LatticeStrainModels._REGISTRY corresponding to (mineral, charge, authors).
 
-lsm_phases() = unique(first.(keys(LatticeStrainModels._REGISTRY)))
+    """
+
+    NA = 6.02214076e23 # Avogadro's number
+
+    # Multisite model: weighted average of site-specific D values
+    if LatticeStrainModels.has_multisite_model(mineral, elcharge, authors)
+        variants = LatticeStrainModels.get_multisite_variants(mineral, elcharge, authors)
+        variants === nothing && error("No multisite variants found for mineral=$(mineral), charge=$(elcharge), authors=$(authors)")
+
+        total_weight = sum(weight for (_, weight) in variants)
+        total_weight > 0.0 || error("Invalid multisite weights for mineral=$(mineral), charge=$(elcharge), authors=$(authors): sum(weights) must be > 0")
+
+        return sum(weight * _LSM_D(mineral, element, elcharge, variant_authors, params) for (variant_authors, weight) in variants) / total_weight
+    end
+
+    # Single-site model
+
+    # Blundy & Wood model
+    # D = D0 * exp(-σ/(R*T))
+    # \sigma = 4*π*E*NA*(r0/2*(r0-ri)^2 - 1/3*(r0-ri)^3))
+
+    # For ri, need to get the ionic radius for this element with given charge and coordination number
+
+    lsm = get_lsm(authors=authors) # The model charge is defined by the registered model for authors; elcharge is only used for the ionic radius.
+
+    r0 = lsm.r0 isa Function ? lsm.r0(params) : lsm.r0
+    E  = lsm.E  isa Function ? lsm.E(params)  : lsm.E
+    D0 = lsm.D0 isa Function ? lsm.D0(params) : lsm.D0
+
+    ri = _get_ri(element, elcharge, lsm.coordination)
+
+    # Convert to SI units
+    r0_si = r0 * 1e-10 # Angstrom to meters
+    ri_si = ri * 1e-10 # Angstrom to meters
+    E_si  = E * 1e9 # GPa to Pa
+    T_K   = params[:T] + 273.15 # Celsius to Kelvin
+
+    dr = r0_si - ri_si
+    strain = -4π * E_si * NA * (r0_si / 2 * dr^2 - dr^3 / 3)
+    return D0 * exp(strain / (R * T_K))
+
+    
+end
 
 end # module
