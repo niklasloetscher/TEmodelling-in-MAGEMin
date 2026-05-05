@@ -1,4 +1,4 @@
-module PartitionCoefficientsV2
+module PartitionCoefficients
 
 using ..LatticeStrainModels
 using ..LSMUtils

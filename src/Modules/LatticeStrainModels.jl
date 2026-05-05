@@ -18,18 +18,18 @@ end
 """ Feldspar; 3+; Bédard (2023) """
 const _fsp3_bed23 = LatticeStrainModel(
     "fsp", 3, 8, "bed23",
-    params -> -0.067*params[:params[:XAn]] + 1.331,
+    params -> -0.067*params[:XAn] + 1.331,
     params -> begin
-		if params[:params[:meltH2O]] < 1.0
-			E = 1.2808*params[:XAn] + 3.4892
-		elseif params[:meltH2O] >= 1.0 & params[:meltH2O] < 5.0
+		if (params[:meltH2O]*100.0) < 1.0
+			E = 1.2808*params[:XAn] + 3.4897
+		elseif ((params[:meltH2O]*100.0) >= 1.0) & ((params[:meltH2O]*100.0) < 5.0)
 			E = 1.247*params[:XAn] + 3.4238
 		else
 			E = 1.2675*params[:XAn] + 3.3288
 		end
 		return exp(E)
 	end,
-    params -> exp(-2.8328*params[:XAn] - 0.0538)
+    params -> exp(-2.8323*params[:XAn] - 0.0538)
 )
 
 
@@ -39,7 +39,7 @@ const _fsp3_sun17 = LatticeStrainModel(
     "fsp", 3, 8, "sun17_3",
     1.179,
     196.0,
-    params -> exp(16.05 - (19.45 + 1.17*(params[:P]/10)^2) / (R*(params[:T]+273.15)) * 1e4 - 5.17*params[:fspXCa]^2)
+    params -> exp(16.05 - ((19.45 + 1.17*(params[:P]/10)^2) / (R*(params[:T]+273.15))) * 1e4 - 5.17*params[:fspXCa]^2)
 )
 
 
@@ -60,9 +60,17 @@ const _cpx3_sl12 = LatticeStrainModel(
     params -> exp(-0.91*params[:meltXH2O] + 1.98*params[:cpxXMgM2] + 4.37*params[:cpxXAlT] + 71900/(R*(params[:T]+273.15)) - 7.14)
 )
 
+""" Clinopyroxene; 2+; Wood & Blundy (2014); based on Sun & Liang (2012) """
+const _cpx2_wb14 = LatticeStrainModel(
+    "cpx", 2, 8, "wb14cpx",
+    params -> -0.212*params[:cpxXMgM2] - 0.104*params[:cpxXAlM1] + 1.066 + 0.06,
+    params -> 2.0/3.0*1000.0*(2.27*(-0.212*params[:cpxXMgM2] - 0.104*params[:cpxXAlM1] + 1.066)-2.00),
+    params -> params[:cpxCaO]/params[:meltCaO]
+)
+
 """ Clinopyroxene M1; 3+; Bédard (2014) """
 const _cpx3_bed14M1 = LatticeStrainModel(
-    "cpx", 3, 8, "bed14M1",
+    "cpx", 3, 6, "bed14M1",
     params -> begin
 		if (18e3/(params[:T]+273.15)-13.0) < -0.17112
 			r0 = -0.0040115*(18e3/(params[:T]+273.15)-13.0)^2-0.019187*(18e3/(params[:T]+273.15)-13.0)+0.74173
@@ -101,7 +109,7 @@ const _cpx3_bed14M2 = LatticeStrainModel(
 
 """ Orthopyroxene; 3; Bédard (2025) """
 const _opx3_bed25 = LatticeStrainModel(
-    "opx", 3, 6, "bed25",
+    "opx", 3, 8, "bed25",
     0.81,
     params -> begin
 		if (params[:meltMgO]*100.0) > 3.58
@@ -119,6 +127,21 @@ const _opx3_bed25 = LatticeStrainModel(
 		end
 		return D0
 	end
+)
+
+""" Orthopyroxene; 2; Wood & Blundy (2014) based on Bédard (2005) """
+const _opx2_wb14 = LatticeStrainModel(
+    "opx", 2, 8, "wb14opx",
+    0.81+0.08,
+    params -> begin
+		if (params[:meltMgO]*100.0) > 3.58
+			E = 78.495 + 26.867 * log(params[:meltMgO]*100.0)
+		else
+			E = 103.564 + 6.194 * log(params[:meltMgO]*100.0)
+		end
+		return 2.0/3.0*E
+	end,
+    params -> params[:opxMgO]/params[:meltMgO]
 )
 
 """ Amphibole; 3; Shimizu et al. (2017) mineral """
@@ -145,9 +168,17 @@ const _g3_mk20 = LatticeStrainModel(
     params -> 7.2*params[:gtFeO]/params[:meltFeOhydr]
 )
 
+""" Garnet; 2; Wood & Blundy (2014) based on Meltzer & Kessel (2020) """
+const _g2_wb14 = LatticeStrainModel(
+    "g", 2, 8, "wb14g",
+    params -> 1.083 - 9.027e-5*(params[:T]+273.15) - 7.865e-4*params[:gtMgO]/params[:meltMgOhydr] + 0.053,
+    params -> 2.0/3.0*(350.0*params[:meltχH2O] - 542.0*params[:meltMgNhydr] + 1854.0*params[:meltFeOhydr]/params[:meltSiO2hydr] + 485.0),
+    params -> params[:gtMgO]/params[:meltMgO]
+)
+
 """ Garnet; 3; Sun & Liang (2013) """
 const _g3_sl13 = LatticeStrainModel(
-    "g", 3, 8, "sl13",
+    "g", 3, 8, "sl13g",
     params -> 0.155*params[:XCa] + 0.78,
     params -> 1000.0*(2.29*(0.155*params[:XCa] + 0.78)-1.62),
     params -> exp(-1.02*params[:gtXCa] + (91700.0 - 91.34*(params[:P]/10.0)*(38.0-(params[:P]/10.0)))/(R*(params[:T]+273.15)) - 2.05)
@@ -163,7 +194,7 @@ const _spl3_sie20 = LatticeStrainModel(
 
 """ Olivine; 3; Bédard (2005) """
 const _ol3_bed05 = LatticeStrainModel(
-    "ol", 3, 6, "bed05",
+    "ol", 3, 8, "bed05", # Bédard seems to use 8-fold coordination!
     0.807,
     params -> begin
 		if (params[:meltMgO]*100.0) > 1.5
@@ -175,6 +206,23 @@ const _ol3_bed05 = LatticeStrainModel(
 	end,
     params -> exp(-0.6126633*log(params[:meltMgO]*100.0) - 0.02713243)
 )
+
+""" Olivine; 3; Sun & Liang (2013) """
+const _ol3_sl13 = LatticeStrainModel(
+    "ol", 3, 6, "sl13ol",
+    0.72,
+    426.0,
+    params -> exp(-0.45 - 0.11*(params[:P]/10) + 1.54*params[:meltXCatAl] - 1.94e-2*params[:olFo])
+)
+
+""" Olivine; 2; Wood & Blundy (2014) """
+const _ol2_wb14 = LatticeStrainModel(
+    "ol", 2, 6, "wb14ol",
+    0.72,
+	240.0,
+    params -> params[:olMgO]/params[:meltMgO]
+)
+
 
 """ Apatite; 3; Jirku et al. (2025) """
 const _ap3_jir25 = LatticeStrainModel(
@@ -200,16 +248,23 @@ const _REGISTRY = Dict{Tuple{String,Int,String}, LatticeStrainModel}(
 	("cpx", 3, "sl12") => _cpx3_sl12,
 	("cpx", 3, "bed14M1") => _cpx3_bed14M1,
 	("cpx", 3, "bed14M2") => _cpx3_bed14M2,
+	("cpx", 2, "wb14cpx") => _cpx2_wb14,
 	("opx", 3, "bed25") => _opx3_bed25,
+	("opx", 2, "wb14opx") => _opx2_wb14,
 	("amp", 3, "shi17mineral") => _amp3_shi17mineral,
 	("amp", 3, "shi17melt") => _amp3_shi17melt,
 	("g", 3, "mk20") => _g3_mk20,
-	("g", 3, "sl13") => _g3_sl13,
+	("g", 3, "sl13g") => _g3_sl13,
+	("g", 2, "wb14g") => _g2_wb14,
 	("spl", 3, "sie20") => _spl3_sie20,
 	("ol", 3, "bed05") => _ol3_bed05,
+	("ol", 3, "sl13ol") => _ol3_sl13,
+	("ol", 2, "wb14ol") => _ol2_wb14,
 	("ap", 3, "jir25") => _ap3_jir25,
 	("zr", 3, "str23") => _zr3_str23
 )
+
+const _REGISTRY_BY_AUTHORS = Dict(model.authors => model for model in values(_REGISTRY))
 
 """ 
 Multisite model variants with stoichiometric weights.
@@ -233,13 +288,18 @@ function has_multisite_model(mineral::String, charge::Int, authors::String)
     return haskey(_MULTISITE_REGISTRY, (mineral, charge, authors))
 end
 
-function get_lsm(; mineral::String, charge::Int, authors::String)
-    key = (mineral, charge, authors)
-    haskey(_REGISTRY, key) || error(
-        "No model for mineral=$(mineral), charge=$(charge), authors=$(authors). " *
-        "Available: $(collect(keys(_REGISTRY)))"
+function get_lsm(; authors::String, mineral::Union{Nothing,String}=nothing, charge::Union{Nothing,Int}=nothing)
+    if mineral !== nothing && charge !== nothing
+        key = (mineral, charge, authors)
+        if haskey(_REGISTRY, key)
+            return _REGISTRY[key]
+        end
+    end
+
+    haskey(_REGISTRY_BY_AUTHORS, authors) || error(
+        "No model for authors=$(authors). Available authors: $(collect(keys(_REGISTRY_BY_AUTHORS)))"
     )
-    return _REGISTRY[key]
+    return _REGISTRY_BY_AUTHORS[authors]
 end
 
 end  # module
