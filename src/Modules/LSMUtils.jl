@@ -3,7 +3,7 @@ module LSMUtils
 # using ..LatticeStrainModels
 # using ..PartitionCoefficients
 
-export Eu_ratio_Burnham, Kd_Eu, optical_basicity, get_params_for_phase
+export Eu_ratio_Burnham, Kd_Eu, optical_basicity, get_params_for_phase, calc_comp_fo2
 
 # Eu-ratio
 function Eu_ratio_Burnham(logfO2::Float64, T::Float64, Λ::Float64)
@@ -229,6 +229,74 @@ function get_params_for_phase(
     end
 
     return params
+end
+
+
+# Getting Fe2O3, FeO speciation after Kress & Carmichael (1991)
+function calc_comp_fo2(bulkin, t, p, delta)
+    # Calculates new composition with the fo2 (and thus Fe valence) taken into account for a new temp or pressure
+    # T in C, P in MPa, bulkin as array of wt% corresponding to:
+    # [SiO2, Al2O3, CaO, MgO, FeO, K2O, Na2O, TiO2, O, Cr2O3, H2O]
+    # Returns new_comp as array of wt% corresponding to:
+    # [SiO2, Al2O3, CaO, MgO, FeO, Fe2O3, K2O, Na2O, TiO2, Cr2O3, H2O]
+
+    t = t + 273.15
+
+    logfo2FMQ = 8.58 - 25050 / t
+    logfo2 = delta + logfo2FMQ
+    fo2 = 10^logfo2
+
+    mm = Dict("SiO2" => 60.08, "TiO2" => 79.866, "Al2O3" => 101.96, "Fe2O3" => 159.69,
+              "FeO" => 71.844, "MnO" => 70.9374, "MgO" => 40.3044, "CaO" => 56.0774,
+              "Na2O" => 61.9789, "K2O" => 94.2, "P2O5" => 283.89, "H2O" => 18.01528,
+              "CO2" => 44.01, "S" => 32.065, "Cl" => 35.453, "F" => 18.9984)
+
+    p = p * 1e6
+    param = [0.196, 11492.0, -6.675, -2.243, -1.828, 3.201, 5.854, 6.215, -3.36, 1673.0, -7.01e-7, -1.54e-10, 3.85e-17]
+
+    # Build comp_dict from fixed input oxide order, ignoring "O"
+    input_oxides = ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "K2O", "Na2O", "TiO2", "O", "Cr2O3", "H2O"]
+    comp_dict = Dict(input_oxides[i] => bulkin[i] for i in eachindex(input_oxides) if input_oxides[i] != "O")
+
+    # Ensure Fe2O3 is present (may not be in input)
+    get!(comp_dict, "Fe2O3", 0.0)
+
+    # Divide composition by molar mass to get moles (only for keys present in both comp_dict and mm)
+    mol = Dict(k => comp_dict[k] / mm[k] for k in keys(comp_dict) if haskey(mm, k))
+
+    mol_sum = sum(values(mol))
+    mol_frac = Dict(k => v / mol_sum for (k, v) in mol)
+
+    # Use Kress & Carmichael Eq 7 to calculate Fe2O3/FeO ratio
+    Fe2O3FeO = exp((param[1] * log(fo2)) + (param[2] / t) + param[3] +
+                   ((param[4] * get(mol_frac, "Al2O3", 0.0)) + (param[5] * get(mol_frac, "FeO", 0.0)) +
+                    (param[6] * get(mol_frac, "CaO", 0.0)) + (param[7] * get(mol_frac, "Na2O", 0.0)) +
+                    (param[8] * get(mol_frac, "K2O", 0.0))) +
+                   param[9] * (1 - param[10] / t - log(t / param[10]) +
+                   param[11] * (p / t) + param[12] * ((t - param[10]) * (p / t) +
+                   param[13] * (p^2) / t))
+               )
+
+    FeOtotal = ((comp_dict["FeO"] + comp_dict["Fe2O3"] / 1.1111) / mm["FeO"]) / mol_sum
+    XFe2O3 = Fe2O3FeO * FeOtotal / (2 * Fe2O3FeO + 1)
+    XFeO = FeOtotal / (1 + 2 * Fe2O3FeO)
+    molFe3 = XFe2O3 * 2
+    molFe2 = XFeO
+    molFe3_Fetot_ratio = molFe3 / (molFe2 + molFe3)
+    Fe3_Fe2 = molFe3 / molFe2
+
+    mol_frac["FeO"] = XFeO
+    mol_frac["Fe2O3"] = XFe2O3
+
+    xmw = Dict(k => mol_frac[k] * mm[k] for k in keys(mol_frac) if haskey(mm, k))
+    xmw_sum = sum(values(xmw))
+    wt = Dict(k => v * (100 / xmw_sum) for (k, v) in xmw)
+
+    # Build output array in fixed order, replacing O with Fe2O3
+    output_oxides = ["SiO2", "Al2O3", "CaO", "MgO", "FeO", "Fe2O3", "K2O", "Na2O", "TiO2", "Cr2O3", "H2O"]
+    new_comp = [get(wt, ox, get(comp_dict, ox, 0.0)) for ox in output_oxides]
+
+    return new_comp, Fe3_Fe2
 end
 
 
