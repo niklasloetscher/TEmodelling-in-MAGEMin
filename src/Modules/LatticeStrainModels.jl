@@ -39,7 +39,7 @@ const _fsp3_sun17 = LatticeStrainModel(
     "fsp", 3, 8, "sun17_3",
     1.179,
     196.0,
-    params -> exp(16.05 - ((19.45 + 1.17*(params[:P]/10)^2) / (R*(params[:T]+273.15))) * 1e4 - 5.17*params[:fspXCa]^2)
+    params -> exp(16.05 - ((19.45 + 1.17*(params[:P]/10.0)^2) / (R*(params[:T]+273.15))) * 1e4 - 5.17*params[:fspXCa]^2)
 )
 
 
@@ -47,8 +47,8 @@ const _fsp3_sun17 = LatticeStrainModel(
 const _fsp2_sun17 = LatticeStrainModel(
     "fsp", 2, 8, "sun17_2",
     params -> 0.075*params[:fspXNa]+1.189,
-    params -> -487*(0.075*params[:fspXNa]+1.189) + 719,
-    params -> exp(2.39*params[:fspXNa]^2+(6910-2542*(params[:P]/10)^2)/(R*(params[:T]+273.15)))
+    params -> -487.0*(0.075*params[:fspXNa]+1.189) + 719.0,
+    params -> exp(2.39*params[:fspXNa]^2+(6910.0-2542.0*(params[:P]/10.0)^2)/(R*(params[:T]+273.15)))
 )
 
 
@@ -56,8 +56,8 @@ const _fsp2_sun17 = LatticeStrainModel(
 const _cpx3_sl12 = LatticeStrainModel(
     "cpx", 3, 8, "sl12",
     params -> -0.212*params[:cpxXMgM2] - 0.104*params[:cpxXAlM1] + 1.066,
-    params -> 1000.0*(2.27*(-0.212*params[:cpxXMgM2] - 0.104*params[:cpxXAlM1] + 1.066)-2.00),
-    params -> exp(-0.91*params[:meltXH2O] + 1.98*params[:cpxXMgM2] + 4.37*params[:cpxXAlT] + 71900/(R*(params[:T]+273.15)) - 7.14)
+    params -> 1000.0*(2.27*(-0.212*params[:cpxXMgM2] - 0.104*params[:cpxXAlM1] + 1.066)-2.0),
+    params -> exp(-0.91*params[:meltXH2O] + 1.98*params[:cpxXMgM2] + 4.37*params[:cpxXAlT] + 71900.0/(R*(params[:T]+273.15)) - 7.14)
 )
 
 """ Clinopyroxene; 2+; Wood & Blundy (2014); based on Sun & Liang (2012) """
@@ -149,7 +149,7 @@ const _amp3_shi17mineral = LatticeStrainModel(
     "amp", 3, 8, "shi17mineral",
     params -> -0.039*params[:ampXFmM4] + 1.043,
     337.0,
-    params -> exp(-2.95*params[:ampXK] - 1.83*params[:ampXNa] - 0.35*params[:ampXMg] - 1.52*params[:ampXTi] + 72700/(R*(params[:T]+273.15)) - 4.21)
+    params -> exp(-2.95*params[:ampXK] - 1.83*params[:ampXNa] - 0.35*params[:ampXMg] + 1.52*params[:ampXTi] + 72700/(R*(params[:T]+273.15)) - 4.21)
 )
 
 """ Amphibole; 3; Shimizu et al. (2017) melt """
@@ -157,7 +157,7 @@ const _amp3_shi17melt = LatticeStrainModel(
     "amp", 3, 8, "shi17melt",
     params -> -0.048*params[:ampXFmM4] + 1.045,
     341.0,
-    params -> exp(-3.08)*params[:meltXSi]^0.74*params[:meltXTi]^(-0.33)*params[:meltXCa]^(-0.84)
+    params -> exp(-3.08 + 0.74*params[:meltXSi] - 0.33*params[:meltXTi] - 0.84*params[:meltXCa])
 )
 
 """ Garnet; 3; Meltzer & Kessel (2020) """
@@ -181,20 +181,20 @@ const _g3_sl13 = LatticeStrainModel(
     "g", 3, 8, "sl13g",
     params -> 0.155*params[:XCa] + 0.78,
     params -> 1000.0*(2.29*(0.155*params[:XCa] + 0.78)-1.62),
-    params -> exp(-1.02*params[:gtXCa] + (91700.0 - 91.34*(params[:P]/10.0)*(38.0-(params[:P]/10.0)))/(R*(params[:T]+273.15)) - 2.05)
+    params -> exp(-1.02*params[:gtXCa] + (91700.0 - 91.35*(params[:P]/10.0)*(38.0-(params[:P]/10.0)))/(R*(params[:T]+273.15)) - 2.05)
 )
 
 """ Spinel/Magentite; Sievwright et al. (2020) """
 const _spl3_sie20 = LatticeStrainModel(
     "spl", 3, 6, "sie20",
     0.63,
-    340.7,
-    0.94
+    340.7, # Value at QFM
+    0.94   # Value at QFM
 )
 
 """ Olivine; 3; Bédard (2005) """
 const _ol3_bed05 = LatticeStrainModel(
-    "ol", 3, 8, "bed05", # Bédard seems to use 8-fold coordination!
+    "ol", 3, 6, "bed05", # Bédard seems to use 8-fold coordination!
     0.807,
     params -> begin
 		if (params[:meltMgO]*100.0) > 1.5
