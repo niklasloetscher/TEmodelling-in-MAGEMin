@@ -39,7 +39,7 @@ const _fsp3_sun17 = LatticeStrainModel(
     "fsp", 3, 8, "sun17_3",
     1.179,
     196.0,
-    params -> exp(16.05 - ((19.45 + 1.17*(params[:P]/10.0)^2) / (R*(params[:T]+273.15))) * 1e4 - 5.17*params[:fspXCa]^2)
+    params -> exp(16.05 - ((19.45 + 1.17*(params[:P]/10.0)^2) / (R*(params[:T]+273.15))) * 1e4 - 5.17*params[:fspXCa]^2) # Yields values that are too low
 )
 
 
@@ -157,7 +157,7 @@ const _amp3_shi17melt = LatticeStrainModel(
     "amp", 3, 8, "shi17melt",
     params -> -0.048*params[:ampXFmM4] + 1.045,
     341.0,
-    params -> exp(-3.08 + 0.74*params[:meltXSi] - 0.33*params[:meltXTi] - 0.84*params[:meltXCa])
+    params -> exp(-3.08 + 0.74*log(params[:meltXSi]) - 0.33*log(params[:meltXTi]) - 0.84*log(params[:meltXCa]))
 )
 
 """ Garnet; 3; Meltzer & Kessel (2020) """
@@ -165,7 +165,7 @@ const _g3_mk20 = LatticeStrainModel(
     "g", 3, 8, "mk20",
     params -> 1.083 - 9.027e-5*(params[:T]+273.15) - 7.865e-4*params[:gtMgO]/params[:meltMgOhydr],
     params -> 350.0*params[:meltχH2O] - 542.0*params[:meltMgNhydr] + 1854.0*params[:meltFeOhydr]/params[:meltSiO2hydr] + 485.0,
-    params -> 7.2*params[:gtFeO]/params[:meltFeOhydr]
+    params -> minimum([100.0, 7.2*params[:gtFeO]/params[:meltFeOhydr]])
 )
 
 """ Garnet; 2; Wood & Blundy (2014) based on Meltzer & Kessel (2020) """
@@ -179,9 +179,9 @@ const _g2_wb14 = LatticeStrainModel(
 """ Garnet; 3; Sun & Liang (2013) """
 const _g3_sl13 = LatticeStrainModel(
     "g", 3, 8, "sl13g",
-    params -> 0.155*params[:XCa] + 0.78,
-    params -> 1000.0*(2.29*(0.155*params[:XCa] + 0.78)-1.62),
-    params -> exp(-1.02*params[:gtXCa] + (91700.0 - 91.35*(params[:P]/10.0)*(38.0-(params[:P]/10.0)))/(R*(params[:T]+273.15)) - 2.05)
+    params -> 0.155*params[:gtXCa] + 0.78,
+    params -> 1000.0*(2.29*(0.155*params[:gtXCa] + 0.78)-1.62),
+    params -> exp(-1.02*params[:gtXCa] + (91700.0 - 91.35*(params[:P]/10.0)*(38.0-(params[:P]/10.0)))/(R*(params[:T]+273.15)) - 2.05) # Extremely high values!
 )
 
 """ Spinel/Magentite; Sievwright et al. (2020) """
@@ -194,7 +194,7 @@ const _spl3_sie20 = LatticeStrainModel(
 
 """ Olivine; 3; Bédard (2005) """
 const _ol3_bed05 = LatticeStrainModel(
-    "ol", 3, 6, "bed05", # Bédard seems to use 8-fold coordination!
+    "ol", 3, 8, "bed05", # Bédard seems to use 8-fold coordination!
     0.807,
     params -> begin
 		if (params[:meltMgO]*100.0) > 1.5

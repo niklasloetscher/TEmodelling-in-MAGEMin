@@ -18,7 +18,9 @@ const PHASE_ALIASES = Dict{String,String}(
     "cm"     => "spl",
     "usp"    => "spl",
     "mgt"    => "spl",
-	"pat"    => "mu"
+	"pat"	 => "mu",
+	"sill"   => "ky",
+	"and"    => "ky"
 )
 
 const CHONDRITIC_TE = Dict{String, Float64}([])

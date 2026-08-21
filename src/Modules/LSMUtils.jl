@@ -15,7 +15,7 @@ function Eu_ratio_Burnham(logfO2::Float64, T::Float64, Λ::Float64)
             - T... Temperature in °C
             - Λ... Optical basicity (Duffy, 1993)
     """
-    burnham_ratio = 1/(1+10^(-0.25*logfO2 - 6410/(T+273.15) -14.2Λ + 10.1)) #Eu3+/∑Eu
+    burnham_ratio = 1/(1+10^(-0.25*logfO2 - 6410/(T+273.15) - 14.2*Λ + 10.1)) #Eu3+/∑Eu
     ratio = (1-burnham_ratio)/burnham_ratio # Convert to Eu2+/Eu3+
     return ratio
 end
@@ -44,7 +44,7 @@ function optical_basicity(bulk)
     Λ = sum(bulk.*O_units.*lc98)/sum(bulk.*O_units)
 
     return Λ
-end
+end 
 
 
 function _oxide_idx(oxides::Vector{String}, name::String)
@@ -97,7 +97,7 @@ function get_params_for_phase(
     params[:T] = T
     params[:P] = P
     params[:logfO2] = logfO2
-    params[:Λ] = optical_basicity(bulk)
+    params[:Λ] = optical_basicity(replace!(bulk, NaN => 0.0))
 
     # Defaults for all phase-specific fields expected by LSM models.
     params[:XAn] = 0.0
@@ -118,6 +118,8 @@ function get_params_for_phase(
     iSiO2 = _oxide_idx(oxides, "SiO2")
     iTiO2 = _oxide_idx(oxides, "TiO2")
     iCaO  = _oxide_idx(oxides, "CaO")
+    iNa2O = _oxide_idx(oxides, "Na2O")
+    iK2O  = _oxide_idx(oxides, "K2O")
     iMgO  = _oxide_idx(oxides, "MgO")
     iFeO  = _oxide_idx(oxides, "FeO")
     iH2O  = _oxide_idx(oxides, "H2O")
@@ -181,12 +183,9 @@ function get_params_for_phase(
 
     # Feldspar aliases: compute from the actual phase instance currently requested.
     if phase in ("pl", "afs", "fsp")
-        XCaA = Float64(solvecs[idx].siteFractions[2])
-        XNaA = Float64(solvecs[idx].siteFractions[1])
-        denom = XCaA + XNaA
-        params[:XAn] = denom > 0.0 ? XCaA / denom : 0.0
-        params[:fspXNa] = Float64(solvecs[idx].Comp_apfu[7])
-        params[:fspXCa] = Float64(solvecs[idx].Comp_apfu[3])
+        params[:XAn] = Float64(solvecs[idx].emFrac[2])
+        params[:fspXNa] = Float64(solvecs[idx].Comp_apfu[iNa2O])
+        params[:fspXCa] = Float64(solvecs[idx].Comp_apfu[iCaO])
     end
 
     # Clinopyroxene aliases.
@@ -208,15 +207,24 @@ function get_params_for_phase(
     if phase in ("amp", "gl", "act", "cumm", "tr")
         XFeM4 = Float64(solvecs[idx].siteFractions[13])
         XMgM4 = Float64(solvecs[idx].siteFractions[12])
+        ampXK = Float64(solvecs[idx].Comp_apfu[iK2O])
+        ampXNa = Float64(solvecs[idx].Comp_apfu[iNa2O])
+        ampXMg = Float64(solvecs[idx].Comp_apfu[iMgO])
+        ampXTi = Float64(solvecs[idx].Comp_apfu[iTiO2])
+        params[:ampXK] = ampXK
+        params[:ampXNa] = ampXNa
+        params[:ampXMg] = ampXMg
+        params[:ampXTi] = ampXTi
         params[:ampXFmM4] = XFeM4 + XMgM4
     end
 
     if phase == "g"
-        gtH2O = _safe_comp_wt(solvecs, idx, oxides, "H2O")
         gtFeO = _safe_comp_wt(solvecs, idx, oxides, "FeO")
         gtMgO = _safe_comp_wt(solvecs, idx, oxides, "MgO")
-        params[:gtFeO] = gtFeO * (sum(solvecs[idx].Comp_wt) - gtH2O)
-        params[:gtMgO] = gtMgO * (sum(solvecs[idx].Comp_wt) - gtH2O)
+        gtXCa = Float64(solvecs[idx].Comp_apfu[iCaO])
+        params[:gtFeO] = gtFeO
+        params[:gtMgO] = gtMgO
+        params[:gtXCa] = gtXCa
     end
 
     if phase == "ol"
